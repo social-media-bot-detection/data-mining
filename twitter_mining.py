@@ -4,6 +4,7 @@ import os
 import json
 from unidecode import unidecode
 import csv
+import re
 
 
 # Configuration file
@@ -23,19 +24,69 @@ auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
 api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
 
+emoji_pattern = re.compile("["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                           "]+", flags=re.UNICODE)
+
+
+def file_exists(file_path):
+    return os.path.exists(file_path)
+
 
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
-    if not os.path.exists(directory):
+    if not file_exists(directory):
         os.makedirs(directory)
+        if(file_path == 'csv/'):
+            with open('csv/all_users_info.csv', 'wb') as f:
+                writer = csv.writer(f)
+                writer.writerow(["screen_name", "description", "followers", "following", "profile_image_url", "location", "verified", "created_at"])
+            pass
+            f.close()
+
+
+def handle_limit(cursor):
+    while True:
+        try:
+            yield cursor.next()
+        except tweepy.RateLimitError:
+            # time.sleep(15 * 60)  # wait encouraged 15 minutes
+            print ("Rate limit reached!")
+            break
+
+
+def get_user_info(screen_name):
+    user = api.get_user(screen_name)
+    screen_name = user.screen_name
+    description = unidecode(emoji_pattern.sub(r'', user.description))  # no emoji nor accents
+    followers = user.followers_count
+    following = user.friends_count
+    profile_image_url = user.profile_image_url.replace("normal", "200x200")
+    location = unidecode(user.location)
+    verified = user.verified
+    created_at = user.created_at
+
+    print("screen name: %s" % screen_name)
+    print("created at: %s" % created_at)
+    print("followers: %s" % followers)
+    print("following: %s" % following)
+    print("image url: %s" % profile_image_url)
+    print("location: %s" % location)
+    print("verified: %s" % verified)
+
+    with open('csv/all_users_info.csv', 'a+') as f:
+        writer = csv.writer(f)
+        writer.writerow([screen_name, description, followers, following, profile_image_url, location, verified, created_at])
+    pass
+    f.close()
 
 
 def get_all_tweets(screen_name):
     # Twitter only allows access to a users most recent 3240 tweets with this method
     print ("getting all tweets from %s into csv file..." % screen_name)
-
-    ensure_dir("csv/")
-    ensure_dir("txt/")
 
     # initialize a list to hold all the tweepy Tweets
     alltweets = []
@@ -71,13 +122,19 @@ def get_all_tweets(screen_name):
     hashtags_file.close()
 
     # write the csv
-    with open("csv/"+'%s_tweets.csv' % screen_name, 'wb') as f:
+    with open('csv/'+'%s_tweets.csv' % screen_name, 'wb') as f:
         writer = csv.writer(f)
         writer.writerow(["id", "created_at", "retweets", "favorites", "text"])
         writer.writerows(outtweets)
     pass
+    f.close()
+
 
 if __name__ == '__main__':
     # pass in the username of the account you want to analyze
+    ensure_dir("csv/")
+    ensure_dir("txt/")
     screen_name = sys.argv[1]
-    get_all_tweets(screen_name)
+    if not file_exists("csv/"+'%s_tweets.csv' % screen_name):
+        get_user_info(screen_name)
+        get_all_tweets(screen_name)
