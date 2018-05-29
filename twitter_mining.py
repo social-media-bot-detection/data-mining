@@ -22,6 +22,7 @@ ACCESS_SECRET = data["access_secret"]
 # authorize twitter, initialize tweepy
 auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
+# auth.secure = True
 api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
 
 emoji_pattern = re.compile("["
@@ -30,6 +31,8 @@ emoji_pattern = re.compile("["
         u"\U0001F680-\U0001F6FF"  # transport & map symbols
         u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
                            "]+", flags=re.UNICODE)
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 
 def file_exists(file_path):
@@ -58,6 +61,10 @@ def handle_limit(cursor):
             break
 
 
+def real_screen_name(screen_name):
+    return api.get_user(screen_name).screen_name
+
+
 def get_user_info(screen_name):
     user = api.get_user(screen_name)
     screen_name = user.screen_name
@@ -84,6 +91,19 @@ def get_user_info(screen_name):
     f.close()
 
 
+class Tweet:
+    def __init__(self, id, id_str, created_at, retweet_count, favorite_count, retweeted_from, in_reply_to_screen_name, text, entities):
+        self.id = id
+        self.id_str = id_str
+        self.created_at =  created_at
+        self.retweet_count = retweet_count
+        self.favorite_count = favorite_count
+        self.retweeted_from = retweeted_from
+        self.in_reply_to_screen_name = in_reply_to_screen_name
+        self.text = text.encode("utf-8")
+        self.entities = entities
+
+
 def get_all_tweets(screen_name):
     # Twitter only allows access to a users most recent 3240 tweets with this method
     print ("getting all tweets from %s into csv file..." % screen_name)
@@ -93,7 +113,14 @@ def get_all_tweets(screen_name):
     # make initial request for most recent tweets (200 is the maximum allowed count)
     new_tweets = api.user_timeline(screen_name=screen_name, count=200)
     # save most recent tweets
-    alltweets.extend(new_tweets)
+    for tweet in new_tweets:
+        if hasattr(tweet, 'retweeted_status'):
+            print "RT a tweet from @%s: %s" % (tweet.retweeted_status.user.screen_name, tweet.text.encode('utf-8'))
+            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, tweet.text, tweet.entities))
+        else:
+            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, " ", tweet.in_reply_to_screen_name, tweet.text, tweet.entities))
+        if tweet.in_reply_to_screen_name is not None:
+            print "replied a tweet to @%s: %s" % (tweet.in_reply_to_screen_name, tweet.text)
     # save the id of the oldest tweet less one
     oldest = alltweets[-1].id - 1
     # keep grabbing tweets until there are no tweets left to grab
@@ -103,38 +130,53 @@ def get_all_tweets(screen_name):
         # all subsiquent requests use the max_id param to prevent duplicates
         new_tweets = api.user_timeline(screen_name=screen_name, count=200, max_id=oldest)
         # save most recent tweets
-        alltweets.extend(new_tweets)
+        for tweet in new_tweets:
+            if hasattr(tweet, 'retweeted_status'):
+                print "RT a tweet from @%s: %s" % (tweet.retweeted_status.user.screen_name, tweet.text.encode('utf-8'))
+                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, tweet.text, tweet.entities))
+            else:
+                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, "", tweet.in_reply_to_screen_name, tweet.text, tweet.entities))
+            if tweet.in_reply_to_screen_name is not None:
+                print "replied a tweet to @%s: %s" % (tweet.in_reply_to_screen_name, tweet.text)
         # update the id of the oldest tweet less one
         oldest = alltweets[-1].id - 1
 
         # print "...%s tweets downloaded so far" % (len(alltweets))
 
     # transform the tweepy tweets into a 2D array that will populate the csv
-    outtweets = [[tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.text.encode("utf-8")] for tweet in alltweets]
+    outtweets = [[tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_from, tweet.in_reply_to_screen_name, tweet.text.encode("utf-8")] for tweet in alltweets]
     # print dir(tweet.entities)
     hashtags_file = open("txt/"+screen_name+"_hashtags_only.txt", "w")
     for tweet in alltweets:
         # print " HASHTAGS: "+str(tweet.entities['hashtags'])
         hashtags = tweet.entities['hashtags']
         for hashtag in hashtags:
-            print ("   #"+hashtag['text'])
+            # print ("   #"+hashtag['text'])
             hashtags_file.write(unidecode(hashtag['text'])+"\n")
     hashtags_file.close()
 
     # write the csv
     with open('csv/'+'%s_tweets.csv' % screen_name, 'wb') as f:
         writer = csv.writer(f)
-        writer.writerow(["id", "created_at", "retweets", "favorites", "text"])
+        writer.writerow(["id", "created_at", "retweets", "favorites", "retweeted_from", "in_reply_to", "text"])
         writer.writerows(outtweets)
     pass
     f.close()
+
+
+def get_tweets_mentioned_in(screen_name):
+    search_query = '@%s -filter:retweets' % screen_name
+    tweets = api.search(q=search_query)
+    for tweet in tweets:
+        print "@%s %s: %s\n" % (screen_name, tweet.author.screen_name, tweet.text)
 
 
 if __name__ == '__main__':
     # pass in the username of the account you want to analyze
     ensure_dir("csv/")
     ensure_dir("txt/")
-    screen_name = sys.argv[1]
+    screen_name = real_screen_name(sys.argv[1])
     if not file_exists("csv/"+'%s_tweets.csv' % screen_name):
         get_user_info(screen_name)
         get_all_tweets(screen_name)
+        get_tweets_mentioned_in(screen_name)
