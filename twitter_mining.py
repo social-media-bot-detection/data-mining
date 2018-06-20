@@ -99,10 +99,11 @@ def get_user_info(screen_name):
 
 
 class Tweet:
-    def __init__(self, id, id_str, created_at, retweet_count, favorite_count, retweeted_from, in_reply_to_screen_name, text, entities):
+    def __init__(self, id, id_str, created_at, source, retweet_count, favorite_count, retweeted_from, in_reply_to_screen_name, text, entities):
         self.id = id
         self.id_str = id_str
         self.created_at =  created_at
+        self.source = source
         self.retweet_count = retweet_count
         self.favorite_count = favorite_count
         self.retweeted_from = retweeted_from
@@ -123,9 +124,9 @@ def get_all_tweets(screen_name):
     for tweet in new_tweets:
         if hasattr(tweet, 'retweeted_status'):
             print "RT a tweet from @%s: %s" % (tweet.retweeted_status.user.screen_name.encode('utf-8'), emoji_pattern.sub(r'', tweet.text.encode('utf-8', errors='replace')))
-            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
+            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.source, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
         else:
-            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, " ", tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
+            alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.source, tweet.retweet_count, tweet.favorite_count, " ", tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
         if tweet.in_reply_to_screen_name is not None:
             print "replied a tweet to @%s: %s" % (tweet.in_reply_to_screen_name.encode('utf-8'), emoji_pattern.sub(r'', tweet.text.encode('utf-8', errors='replace')))
     # save the id of the oldest tweet less one
@@ -151,7 +152,7 @@ def get_all_tweets(screen_name):
         # print "...%s tweets downloaded so far" % (len(alltweets))
 
     # transform the tweepy tweets into a 2D array that will populate the csv
-    outtweets = [[tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_from, tweet.in_reply_to_screen_name, tweet.text] for tweet in alltweets]
+    outtweets = [[tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_from, tweet.in_reply_to_screen_name, tweet.source, tweet.text] for tweet in alltweets]
     # print dir(tweet.entities)
     hashtags_file = open("txt/"+screen_name+"_hashtags_only.txt", "w")
     for tweet in alltweets:
@@ -169,7 +170,7 @@ def get_all_tweets(screen_name):
     # write the csv
     with open('csv/'+'%s_tweets.csv' % screen_name, 'wb') as f:
         writer = csv.writer(f)
-        writer.writerow(["id", "created_at", "retweets", "favorites", "retweeted_from", "in_reply_to", "text"])
+        writer.writerow(["id", "created_at", "retweets", "favorites", "retweeted_from", "in_reply_to", "source", "text"])
         writer.writerows(outtweets)
     pass
     f.close()
@@ -192,17 +193,22 @@ def close_file():
 
 
 class SavedTweet:
-    def __init__(self, id, text, type, author, created_at, source, retweeted_from_screen_name, retweeted_tweet_id, in_reply_to_screen_name, replied_tweet_id, hashtags):
+    def __init__(self, id, text, type, author, author_joined_on, created_at, source,
+                retweeted_from_screen_name, retweeted_tweet_id, retweeted_tweet_date,
+                in_reply_to_screen_name, replied_tweet_id, replied_tweet_date, hashtags):
         self.id = id
         self.text = text.encode("utf-8")
         self.type = type
         self.author = author
+        self.author_joined_on = author_joined_on
         self.created_at = created_at
         self.source = source
         self.retweeted_from_screen_name = retweeted_from_screen_name
         self.retweeted_tweet_id = retweeted_tweet_id
+        self.retweeted_tweet_date = retweeted_tweet_date
         self.in_reply_to_screen_name = in_reply_to_screen_name
         self.replied_tweet_id = replied_tweet_id
+        self.replied_tweet_date = replied_tweet_date
         self.hashtags = hashtags
 
 
@@ -222,8 +228,10 @@ class MyStreamListener(tweepy.StreamListener):
         type = "?"
         retweeted_from_screen_name = ""
         retweeted_tweet_id = -1
+        retweeted_tweet_date = ""
         in_reply_to_screen_name = ""
         replied_tweet_id = -1
+        replied_tweet_date = ""
 
         self.counter += 1
         if self.counter >= 20000:
@@ -237,16 +245,20 @@ class MyStreamListener(tweepy.StreamListener):
 
         # When a tweet is published it arrives here.
         print "author: " + status.author.screen_name
+        print "joined on: " + str(status.author.created_at)
         if hasattr(status, 'retweeted_status'):
             type = "retweet"
-            print "RT'ed from @%s, id %d" % (status.retweeted_status.user.screen_name, status.retweeted_status.id)
+            print "RT'ed from @%s, id %s, date %s" % (status.retweeted_status.user.screen_name, status.retweeted_status.id_str, status.retweeted_status.created_at)
             retweeted_from_screen_name = status.retweeted_status.user.screen_name
             retweeted_tweet_id = status.retweeted_status.id_str
+            retweeted_tweet_date = str(status.retweeted_status.created_at)
         elif status.in_reply_to_screen_name is not None and status.in_reply_to_status_id is not None:
             type = "reply"
-            print "replied a tweet to @%s, id %d" % (status.in_reply_to_screen_name, status.in_reply_to_status_id)
+            replied_tweet = api.get_status(status.in_reply_to_status_id_str)
+            print "replied a tweet to @%s, id %s, date %s -> %s" % (status.in_reply_to_screen_name, status.in_reply_to_status_id_str, replied_tweet.created_at, replied_tweet.text)
             in_reply_to_screen_name = status.in_reply_to_screen_name
             replied_tweet_id = status.in_reply_to_status_id_str
+            replied_tweet_date = str(replied_tweet.created_at)
         else:
             type = "own"
         print "src: " + status.source
@@ -259,9 +271,9 @@ class MyStreamListener(tweepy.StreamListener):
         # print dir(status)
         tweet = SavedTweet(
             id=status.id, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
-            created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
-            retweeted_tweet_id=retweeted_tweet_id, in_reply_to_screen_name=in_reply_to_screen_name,
-            replied_tweet_id=replied_tweet_id, hashtags=hashtags
+            author_joined_on = str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
+            retweeted_tweet_id=retweeted_tweet_id, retweeted_tweet_date=retweeted_tweet_date, in_reply_to_screen_name=in_reply_to_screen_name,
+            replied_tweet_id=replied_tweet_id, replied_tweet_date=replied_tweet_date, hashtags=hashtags
         )
         if self.first:
             self.output.write(json.dumps(tweet.__dict__))
