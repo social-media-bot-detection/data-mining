@@ -141,9 +141,9 @@ def get_all_tweets(screen_name):
         for tweet in new_tweets:
             if hasattr(tweet, 'retweeted_status'):
                 print "RT a tweet from @%s: %s" % (tweet.retweeted_status.user.screen_name.encode('utf-8'), emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'))
-                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
+                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.source, tweet.retweet_count, tweet.favorite_count, tweet.retweeted_status.user.screen_name, tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
             else:
-                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.retweet_count, tweet.favorite_count, "", tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
+                alltweets.append(Tweet(tweet.id, tweet.id_str, tweet.created_at, tweet.source, tweet.retweet_count, tweet.favorite_count, "", tweet.in_reply_to_screen_name, emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'), tweet.entities))
             if tweet.in_reply_to_screen_name is not None:
                 print "replied a tweet to @%s: %s" % (tweet.in_reply_to_screen_name.encode('utf-8'), emoji_pattern.sub(r'', tweet.text).encode('utf-8', errors='replace'))
         # update the id of the oldest tweet less one
@@ -255,13 +255,13 @@ class MyStreamListener(tweepy.StreamListener):
         elif status.in_reply_to_screen_name is not None and status.in_reply_to_status_id is not None:
             type = "reply"
             replied_tweet = api.get_status(status.in_reply_to_status_id_str)
-            print "replied a tweet to @%s, id %s, date %s -> %s" % (status.in_reply_to_screen_name, status.in_reply_to_status_id_str, replied_tweet.created_at, replied_tweet.text)
+            print "replied a tweet to @%s, id %s, date %s -> %s" % (status.in_reply_to_screen_name, status.in_reply_to_status_id_str, replied_tweet.created_at, unidecode(emoji_pattern.sub(r'', replied_tweet.text)))
             in_reply_to_screen_name = status.in_reply_to_screen_name
             replied_tweet_id = status.in_reply_to_status_id_str
             replied_tweet_date = str(replied_tweet.created_at)
         else:
             type = "own"
-        print "src: " + status.source
+        print "src: " + unidecode(emoji_pattern.sub(r'', status.source))
         print "date: " + str(status.created_at)
         print "id: " + str(status.id_str)
         print "text: " + emoji_pattern.sub(r'', status.text).encode('utf-8', errors='replace')  # Console output may not be UTF-8
@@ -271,7 +271,7 @@ class MyStreamListener(tweepy.StreamListener):
         # print dir(status)
         tweet = SavedTweet(
             id=status.id, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
-            author_joined_on = str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
+            author_joined_on=str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
             retweeted_tweet_id=retweeted_tweet_id, retweeted_tweet_date=retweeted_tweet_date, in_reply_to_screen_name=in_reply_to_screen_name,
             replied_tweet_id=replied_tweet_id, replied_tweet_date=replied_tweet_date, hashtags=hashtags
         )
