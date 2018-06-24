@@ -59,30 +59,26 @@ class Follower:
         self.created_at = created_at
 
 
-def get_all_followers(screen_name):
+def get_latest_followers(screen_name, match, new_file):
     num_follower = 0
     global output_file_name
     global output_file
-    open_file(screen_name)
-    atexit.register(close_file)
-    first = True
-    users = tweepy.Cursor(api.followers, screen_name=screen_name, count=5000).items()
+    users = api.followers(screen_name=screen_name, count=100)
 
     num_follower = 1
-    while True:
-        try:
-            follower = next(users)
-        except tweepy.TweepError:
-            time.sleep(60*15)
-            follower = next(users)
-        except StopIteration:
-            break
+    latest_follower = ""
+    previous_follower = match
+    first = True
+    for follower in users:
         print "#%d %s <- %s" % (num_follower, screen_name, follower.screen_name)
+        print "previous: %s\nlatest: %s\nmatch: %s\n" % (previous_follower, latest_follower, match)
+        if first:
+            latest_follower = follower.screen_name
+            first = False
+        if follower.screen_name == match:
+            return latest_follower, num_follower - 1
+        previous_follower = follower.screen_name
         num_follower += 1
-        if(num_follower >= 20000):
-            num_follower = 1
-            close_file()
-            open_file(screen_name)
         user = api.get_user(follower.screen_name)
         id = user.id_str
         description = unidecode(emoji_pattern.sub(r'', user.description))  # no emoji nor accents
@@ -122,11 +118,12 @@ def get_all_followers(screen_name):
             profile_image_url=profile_image_url, location=location,
             verified=verified, created_at=created_at
         )
-        if first:
+        if new_file:
             output_file.write(json.dumps(follower_saved.__dict__))
-            first = False
+            new_file = False
         else:
             output_file.write(",\n\n" + json.dumps(follower_saved.__dict__))
+    return latest_follower, num_follower - 1
 
 
 def real_screen_name(screen_name):
@@ -156,9 +153,30 @@ if __name__ == '__main__':
 
     # pass in the username(s) of the account(s) you want to monitor
     ensure_dir("json/")
-    users = sys.argv[2:]
-    for user in users:
-        print "===== Examining %s =====" % user
-
-        screen_name = real_screen_name(user)
-        get_all_followers(screen_name)
+    user = sys.argv[2]
+    screen_name = real_screen_name(user)
+    print "===== Examining %s =====" % user
+    open_file(screen_name)
+    atexit.register(close_file)
+    new_followers_total = 0
+    new_followers_saved = 0
+    most_new_followers_found = 0
+    match = ""
+    new_file = True
+    wait_seconds = 60
+    while True:
+        if(new_followers_saved >= 20000):
+            new_followers_saved = 0
+            close_file()
+            open_file(screen_name)
+            new_file = True
+        print "new_file: %s" % new_file
+        match, new_followers = get_latest_followers(screen_name, match, new_file)
+        if (not new_file) and new_followers > most_new_followers_found:
+            most_new_followers_found = new_followers
+        new_file = False
+        new_followers_saved += new_followers
+        new_followers_total += new_followers
+        print "latest: %s\nnew followers: %d, total: %d, most_found_in_%d_seconds: %d" % (match, new_followers, new_followers_total, wait_seconds, most_new_followers_found)
+        print "===== waiting %d seconds for next scan... =====" % wait_seconds
+        time.sleep(wait_seconds)
