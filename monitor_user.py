@@ -18,6 +18,8 @@ emoji_pattern = re.compile("["
 
 output_file = None
 output_file_name = ""
+shortest_follow_time = datetime.timedelta(days=365*100)  # 100 years
+shortest_follow_time_text = ""
 
 
 def file_exists(file_path):
@@ -47,7 +49,7 @@ def close_file():
 
 class Follower:
     def __init__(self, screen_name, id, description, followers, following,
-                profile_image_url, location, verified, created_at):
+                profile_image_url, location, verified, created_at, followed_at):
         self.screen_name = screen_name
         self.id = id
         self.description = description
@@ -57,6 +59,7 @@ class Follower:
         self.location = location
         self.verified = verified
         self.created_at = created_at
+        self.followed_at = followed_at
 
 
 def get_latest_followers(screen_name, match, new_file):
@@ -71,7 +74,7 @@ def get_latest_followers(screen_name, match, new_file):
     first = True
     for follower in users:
         print "#%d %s <- %s" % (num_follower, screen_name, follower.screen_name)
-        print "previous: %s\nlatest: %s\nmatch: %s\n" % (previous_follower, latest_follower, match)
+        # print "previous: %s\nlatest: %s\nmatch: %s\n" % (previous_follower, latest_follower, match)
         if first:
             latest_follower = follower.screen_name
             first = False
@@ -97,6 +100,8 @@ def get_latest_followers(screen_name, match, new_file):
         print "\tlocation: %s" % location
         current_time = datetime.datetime.now()
         date_delta = current_time - created_at
+        global shortest_follow_time
+        global shortest_follow_time_text
         created_at = str(created_at)
         if(date_delta.days > 364):
             date_delta_text = "{0:.1f} YEARS".format(date_delta.days/365.00)
@@ -110,13 +115,20 @@ def get_latest_followers(screen_name, match, new_file):
             date_delta_text = "{0:.1f} MINUTES".format(date_delta.seconds/60)
         else:  # more than a second
             date_delta_text = "%d SECONDS" % date_delta.seconds
+        follow_time = datetime.timedelta(
+            days=date_delta.days, seconds=date_delta.seconds
+        )
+        if follow_time < shortest_follow_time:
+            shortest_follow_time = follow_time
+            shortest_follow_time_text = date_delta_text
         print "\tcreated_at: %s, %s ago" % (created_at, date_delta_text)
 
         follower_saved = Follower(
             screen_name=follower.screen_name, id=id, description=description,
             followers=followers, following=following,
             profile_image_url=profile_image_url, location=location,
-            verified=verified, created_at=created_at
+            verified=verified, created_at=created_at,
+            followed_at=str(current_time)
         )
         if new_file:
             output_file.write(json.dumps(follower_saved.__dict__))
@@ -149,7 +161,10 @@ if __name__ == '__main__':
     # authorize twitter, initialize tweepy
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
-    api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
+    api = tweepy.API(
+        auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True,
+        compression=True
+    )
 
     # pass in the username(s) of the account(s) you want to monitor
     ensure_dir("json/")
@@ -164,19 +179,22 @@ if __name__ == '__main__':
     match = ""
     new_file = True
     wait_seconds = 60
+    global shortest_follow_time_text
     while True:
         if(new_followers_saved >= 20000):
             new_followers_saved = 0
             close_file()
             open_file(screen_name)
             new_file = True
-        print "new_file: %s" % new_file
         match, new_followers = get_latest_followers(screen_name, match, new_file)
         if (not new_file) and new_followers > most_new_followers_found:
             most_new_followers_found = new_followers
         new_file = False
         new_followers_saved += new_followers
         new_followers_total += new_followers
-        print "latest: %s\nnew followers: %d, total: %d, most_found_in_%d_seconds: %d" % (match, new_followers, new_followers_total, wait_seconds, most_new_followers_found)
+        print "latest: %s,\nnew_followers: %d, total: %d,\nmost_found_in_%d_seconds: %d,\nshortest_follow: %s" % (
+            match, new_followers, new_followers_total, wait_seconds,
+            most_new_followers_found, shortest_follow_time_text
+        )
         print "===== waiting %d seconds for next scan... =====" % wait_seconds
         time.sleep(wait_seconds)
