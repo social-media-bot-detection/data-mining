@@ -9,24 +9,6 @@ import time
 import atexit
 
 
-# Configuration file
-abs_path = os.path.dirname(os.path.realpath(__file__)) + '/'
-with open("config_secret.json") as json_data_file:
-    data = json.load(json_data_file)
-
-
-# Twitter API credentials
-CONSUMER_KEY = data["consumer_key"]
-CONSUMER_SECRET = data["consumer_secret"]
-ACCESS_KEY = data["access_key"]
-ACCESS_SECRET = data["access_secret"]
-
-# authorize twitter, initialize tweepy
-auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
-# auth.secure = True
-api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
-
 emoji_pattern = re.compile("["
         u"\U0001F600-\U0001F64F"  # emoticons
         u"\U0001F300-\U0001F5FF"  # symbols & pictographs
@@ -284,11 +266,29 @@ class MyStreamListener(tweepy.StreamListener):
 
 
 if __name__ == '__main__':
+    # pass in the configuration file
+    abs_path = os.path.dirname(os.path.realpath(__file__)) + '/'
+    with open(sys.argv[1], 'r') as json_data_file:
+        data = json.load(json_data_file)
+
+
+    # Twitter API credentials
+    CONSUMER_KEY = data["consumer_key"]
+    CONSUMER_SECRET = data["consumer_secret"]
+    ACCESS_KEY = data["access_key"]
+    ACCESS_SECRET = data["access_secret"]
+
+    # authorize twitter, initialize tweepy
+    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+    auth.set_access_token(ACCESS_KEY, ACCESS_SECRET)
+    # auth.secure = True
+    api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True, compression=True)
+
     # pass in the username(s) of the account(s) you want to analyze
     ensure_dir("csv/")
     ensure_dir("txt/")
     ensure_dir("json/")
-    users = sys.argv[1:]
+    users = sys.argv[2:]
     user_ids = []
     for user in users:
         user_ids.append(real_user_id(user))

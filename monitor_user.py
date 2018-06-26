@@ -62,7 +62,7 @@ class Follower:
         self.followed_at = followed_at
 
 
-def get_latest_followers(screen_name, match, new_file):
+def get_latest_followers(screen_name, previous_scan, new_file):
     num_follower = 0
     global output_file_name
     global output_file
@@ -70,72 +70,76 @@ def get_latest_followers(screen_name, match, new_file):
 
     num_follower = 1
     latest_follower = ""
-    previous_follower = match
+    # previous_follower = ""
     first = True
+    current_scan = set()
+    new_follower_found = False
     for follower in users:
-        print "#%d %s <- %s" % (num_follower, screen_name, follower.screen_name)
-        # print "previous: %s\nlatest: %s\nmatch: %s\n" % (previous_follower, latest_follower, match)
+        # print "previous: %s\nlatest: %s" % (previous_follower, latest_follower)
         if first:
             latest_follower = follower.screen_name
             first = False
-        if follower.screen_name == match:
-            return latest_follower, num_follower - 1
-        previous_follower = follower.screen_name
-        num_follower += 1
-        user = api.get_user(follower.screen_name)
-        id = user.id_str
-        description = unidecode(emoji_pattern.sub(r'', user.description))  # no emoji nor accents
-        followers = user.followers_count
-        following = user.friends_count
-        tweet_count = user.statuses_count
-        profile_image_url = user.profile_image_url.replace("normal", "200x200")
-        location = unidecode(user.location)
-        verified = user.verified
-        created_at = user.created_at
+        current_scan.add(follower.screen_name)
+        if follower.screen_name in previous_scan:
+            new_follower_found = True
+        elif not new_follower_found:
+            print "#%d %s <- %s" % (num_follower, screen_name, follower.screen_name)
+            # previous_follower = follower.screen_name
+            num_follower += 1
+            user = api.get_user(follower.screen_name)
+            id = user.id_str
+            description = unidecode(emoji_pattern.sub(r'', user.description))  # no emoji nor accents
+            followers = user.followers_count
+            following = user.friends_count
+            tweet_count = user.statuses_count
+            profile_image_url = user.profile_image_url.replace("normal", "200x200")
+            location = unidecode(user.location)
+            verified = user.verified
+            created_at = user.created_at
 
-        print "\tdescription: %s" % description
-        print "\tfollowers: %d" % followers
-        print "\tfollowing: %s" % following
-        print "\ttweet_count: %s" % tweet_count
-        print "\tlocation: %s" % location
-        current_time = datetime.datetime.now()
-        date_delta = current_time - created_at
-        global shortest_follow_time
-        global shortest_follow_time_text
-        created_at = str(created_at)
-        if(date_delta.days > 364):
-            date_delta_text = "{0:.1f} YEARS".format(date_delta.days/365.00)
-        elif(date_delta.days > 30):
-            date_delta_text = "{0:.1f} MONTHS".format(date_delta.days/30.00)
-        elif(date_delta.days > 0):  # more than a day
-            date_delta_text = "%d DAYS" % date_delta.days
-        elif(date_delta.seconds > 3599):  # more than an hour
-            date_delta_text = "{0:.1f} HOURS".format(date_delta.seconds/3600)
-        elif(date_delta.seconds > 59):  # more than a minute
-            date_delta_text = "{0:.1f} MINUTES".format(date_delta.seconds/60)
-        else:  # more than a second
-            date_delta_text = "%d SECONDS" % date_delta.seconds
-        follow_time = datetime.timedelta(
-            days=date_delta.days, seconds=date_delta.seconds
-        )
-        if follow_time < shortest_follow_time:
-            shortest_follow_time = follow_time
-            shortest_follow_time_text = date_delta_text
-        print "\tcreated_at: %s, %s ago" % (created_at, date_delta_text)
+            print "\tdescription: %s" % description
+            print "\tfollowers: %d" % followers
+            print "\tfollowing: %s" % following
+            print "\ttweet_count: %s" % tweet_count
+            print "\tlocation: %s" % location
+            current_time = datetime.datetime.now()
+            date_delta = current_time - created_at
+            global shortest_follow_time
+            global shortest_follow_time_text
+            created_at = str(created_at)
+            if(date_delta.days > 364):
+                date_delta_text = "{0:.1f} YEARS".format(date_delta.days/365.00)
+            elif(date_delta.days > 30):
+                date_delta_text = "{0:.1f} MONTHS".format(date_delta.days/30.00)
+            elif(date_delta.days > 0):  # more than a day
+                date_delta_text = "%d DAYS" % date_delta.days
+            elif(date_delta.seconds > 3599):  # more than an hour
+                date_delta_text = "{0:.1f} HOURS".format(date_delta.seconds/3600)
+            elif(date_delta.seconds > 59):  # more than a minute
+                date_delta_text = "{0:.1f} MINUTES".format(date_delta.seconds/60)
+            else:  # more than a second
+                date_delta_text = "%d SECONDS" % date_delta.seconds
+            follow_time = datetime.timedelta(
+                days=date_delta.days, seconds=date_delta.seconds
+            )
+            if follow_time < shortest_follow_time:
+                shortest_follow_time = follow_time
+                shortest_follow_time_text = date_delta_text
+            print "\tcreated_at: %s, %s ago" % (created_at, date_delta_text)
 
-        follower_saved = Follower(
-            screen_name=follower.screen_name, id=id, description=description,
-            followers=followers, following=following,
-            profile_image_url=profile_image_url, location=location,
-            verified=verified, created_at=created_at,
-            followed_at=str(current_time)
-        )
-        if new_file:
-            output_file.write(json.dumps(follower_saved.__dict__))
-            new_file = False
-        else:
-            output_file.write(",\n\n" + json.dumps(follower_saved.__dict__))
-    return latest_follower, num_follower - 1
+            follower_saved = Follower(
+                screen_name=follower.screen_name, id=id, description=description,
+                followers=followers, following=following,
+                profile_image_url=profile_image_url, location=location,
+                verified=verified, created_at=created_at,
+                followed_at=str(current_time)
+            )
+            if new_file:
+                output_file.write(json.dumps(follower_saved.__dict__))
+                new_file = False
+            else:
+                output_file.write(",\n\n" + json.dumps(follower_saved.__dict__))
+    return latest_follower, current_scan, num_follower - 1
 
 
 def real_screen_name(screen_name):
@@ -176,7 +180,7 @@ if __name__ == '__main__':
     new_followers_total = 0
     new_followers_saved = 0
     most_new_followers_found = 0
-    match = ""
+    previous_scan = set()
     new_file = True
     wait_seconds = 60
     global shortest_follow_time_text
@@ -186,14 +190,14 @@ if __name__ == '__main__':
             close_file()
             open_file(screen_name)
             new_file = True
-        match, new_followers = get_latest_followers(screen_name, match, new_file)
+        latest_follower, previous_scan, new_followers = get_latest_followers(screen_name, previous_scan, new_file)
         if (not new_file) and new_followers > most_new_followers_found:
             most_new_followers_found = new_followers
         new_file = False
         new_followers_saved += new_followers
         new_followers_total += new_followers
         print "latest: %s,\nnew_followers: %d, total: %d,\nmost_found_in_%d_seconds: %d,\nshortest_follow: %s" % (
-            match, new_followers, new_followers_total, wait_seconds,
+            latest_follower, new_followers, new_followers_total, wait_seconds,
             most_new_followers_found, shortest_follow_time_text
         )
         print "===== waiting %d seconds for next scan... =====" % wait_seconds
