@@ -1,8 +1,8 @@
 FROM ubuntu:14.04
 RUN echo "creating data-mining image..."
 RUN mkdir mining
-ADD twitter_mining.py mining/twitter_mining.py
-ADD monitor_user.py mining/monitor_user.py
+ADD tweet_mining.py mining/tweet_mining.py
+ADD user_monitoring.py mining/user_monitoring.py
 ADD config_secret.json mining/config_secret.json
 
 RUN apt-get update
