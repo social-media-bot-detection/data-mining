@@ -183,22 +183,29 @@ if __name__ == '__main__':
     previous_scan = set()
     new_file = True
     wait_seconds = 60
+    errors = 0
     global shortest_follow_time_text
     while True:
-        if(new_followers_saved >= 20000):
-            new_followers_saved = 0
-            close_file()
-            open_file(screen_name)
-            new_file = True
-        latest_follower, previous_scan, new_followers = get_latest_followers(screen_name, previous_scan, new_file)
-        if (not new_file) and new_followers > most_new_followers_found:
-            most_new_followers_found = new_followers
-        new_file = False
-        new_followers_saved += new_followers
-        new_followers_total += new_followers
-        print "latest: %s,\nnew_followers: %d, total: %d,\nmost_found_in_%d_seconds: %d,\nshortest_follow: %s" % (
-            latest_follower, new_followers, new_followers_total, wait_seconds,
-            most_new_followers_found, shortest_follow_time_text
-        )
-        print "===== waiting %d seconds for next scan... =====" % wait_seconds
-        time.sleep(wait_seconds)
+        try:
+            if(new_followers_saved >= 20000):
+                new_followers_saved = 0
+                close_file()
+                open_file(screen_name)
+                new_file = True
+            latest_follower, previous_scan, new_followers = get_latest_followers(screen_name, previous_scan, new_file)
+            if (not new_file) and new_followers > most_new_followers_found:
+                most_new_followers_found = new_followers
+            new_file = False
+            new_followers_saved += new_followers
+            new_followers_total += new_followers
+            print "latest: %s,\nnew_followers: %d, total: %d,\nmost_found_in_%d_seconds: %d,\nshortest_follow: %s\nerrors: %d" % (
+                latest_follower, new_followers, new_followers_total, wait_seconds,
+                most_new_followers_found, shortest_follow_time_text, errors
+            )
+            print "===== waiting %d seconds for next scan... =====" % wait_seconds
+            time.sleep(wait_seconds)
+        except tweepy.error.TweepError as e:
+            print "===== ERROR =====\nreason: %s\napi_code: %d\nresponse: %s" % (
+                e.reason, e.api_code, e.response
+            )
+            errors += 1

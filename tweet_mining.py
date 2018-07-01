@@ -18,6 +18,9 @@ emoji_pattern = re.compile("["
 reload(sys)
 sys.setdefaultencoding('utf8')
 
+num_tweets = {}
+errors = 0
+
 
 def file_exists(file_path):
     return os.path.exists(file_path)
@@ -195,9 +198,10 @@ class SavedTweet:
 
 
 class MyStreamListener(tweepy.StreamListener):
-    def __init__(self, api):
+    def __init__(self, api, users):
         print("===== Realtime Streaming =====")
         self.api = api
+        self.users = users
         self.counter = 0
         self.first = True
         global output_file_name
@@ -207,6 +211,7 @@ class MyStreamListener(tweepy.StreamListener):
         atexit.register(close_file)
 
     def on_status(self, status):
+        # When a tweet is published it arrives here.
         type = "?"
         retweeted_from_screen_name = ""
         retweeted_tweet_id = -1
@@ -225,7 +230,7 @@ class MyStreamListener(tweepy.StreamListener):
             self.counter = 0
             self.first = True
 
-        # When a tweet is published it arrives here.
+        global num_tweets
         print "author: " + status.author.screen_name
         print "joined on: " + str(status.author.created_at)
         if hasattr(status, 'retweeted_status'):
@@ -234,6 +239,10 @@ class MyStreamListener(tweepy.StreamListener):
             retweeted_from_screen_name = status.retweeted_status.user.screen_name
             retweeted_tweet_id = status.retweeted_status.id_str
             retweeted_tweet_date = str(status.retweeted_status.created_at)
+            if retweeted_from_screen_name in num_tweets:
+                num_tweets[retweeted_from_screen_name] += 1
+            else:
+                num_tweets[retweeted_from_screen_name] = 1
         elif status.in_reply_to_screen_name is not None and status.in_reply_to_status_id is not None:
             type = "reply"
             replied_tweet = api.get_status(status.in_reply_to_status_id_str)
@@ -241,8 +250,16 @@ class MyStreamListener(tweepy.StreamListener):
             in_reply_to_screen_name = status.in_reply_to_screen_name
             replied_tweet_id = status.in_reply_to_status_id_str
             replied_tweet_date = str(replied_tweet.created_at)
+            if in_reply_to_screen_name in num_tweets:
+                num_tweets[in_reply_to_screen_name] += 1
+            else:
+                num_tweets[in_reply_to_screen_name] = 1
         else:
             type = "own"
+            if status.author.screen_name in num_tweets:
+                num_tweets[status.author.screen_name] += 1
+            else:
+                num_tweets[status.author.screen_name] = 1
         print "src: " + unidecode(emoji_pattern.sub(r'', status.source))
         print "date: " + str(status.created_at)
         print "id: " + str(status.id_str)
@@ -250,7 +267,10 @@ class MyStreamListener(tweepy.StreamListener):
         hashtags = status.entities['hashtags']
         for hashtag in hashtags:
             print ("   #"+hashtag['text'].encode('utf-8'))
-        # print dir(status)
+        print "errors: %d" % errors
+        print "total_tweets: %d\ntweets_per_user..." % self.counter
+        for real_username in self.users:
+            print "\t%s: %d" % (real_username, num_tweets[real_username])
         tweet = SavedTweet(
             id=status.id, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
             author_joined_on=str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
@@ -290,17 +310,29 @@ if __name__ == '__main__':
     ensure_dir("json/")
     users = sys.argv[2:]
     user_ids = []
+    pos = 0
+    global errors
+    errors = 0
+    global num_tweets
     for user in users:
         user_ids.append(real_user_id(user))
         print "===== Examining %s =====" % user
-
         screen_name = real_screen_name(user)
+        num_tweets[screen_name] = 0
+        users[pos] = screen_name
         if not file_exists("csv/"+'%s_tweets.csv' % screen_name):
             get_user_info(screen_name)
             get_all_tweets(screen_name)
             get_tweets_mentioned_in(screen_name)
+        pos += 1
 
     # Connect to the stream
-    myStreamListener = MyStreamListener(api)
+    myStreamListener = MyStreamListener(api=api, users=users)
     myStream = tweepy.Stream(auth=api.auth, listener=myStreamListener)
-    myStream.filter(follow=user_ids)
+    try:
+        myStream.filter(follow=user_ids)
+    except tweepy.error.TweepError as e:
+        print "===== ERROR =====\nreason: %s\napi_code: %d\nresponse: %s" % (
+            e.reason, e.api_code, e.response
+        )
+        errors += 1
