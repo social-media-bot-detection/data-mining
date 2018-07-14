@@ -180,7 +180,8 @@ def close_file():
 class SavedTweet:
     def __init__(self, id, text, type, author, author_joined_on, created_at, source,
                 retweeted_from_screen_name, retweeted_tweet_id, retweeted_tweet_date,
-                in_reply_to_screen_name, replied_tweet_id, replied_tweet_date, hashtags):
+                in_reply_to_screen_name, replied_tweet_id, replied_tweet_date,
+                replied_tweet_text, hashtags):
         self.id = id
         self.text = text.encode("utf-8")
         self.type = type
@@ -194,6 +195,7 @@ class SavedTweet:
         self.in_reply_to_screen_name = in_reply_to_screen_name
         self.replied_tweet_id = replied_tweet_id
         self.replied_tweet_date = replied_tweet_date
+        self.replied_tweet_text = replied_tweet_text
         self.hashtags = hashtags
 
 
@@ -219,6 +221,7 @@ class MyStreamListener(tweepy.StreamListener):
         in_reply_to_screen_name = ""
         replied_tweet_id = -1
         replied_tweet_date = ""
+        replied_tweet_text = ""
 
         self.counter += 1
         if self.counter >= 20000:
@@ -250,6 +253,7 @@ class MyStreamListener(tweepy.StreamListener):
             in_reply_to_screen_name = status.in_reply_to_screen_name
             replied_tweet_id = status.in_reply_to_status_id_str
             replied_tweet_date = str(replied_tweet.created_at)
+            replied_tweet_text = unidecode(emoji_pattern.sub(r'', replied_tweet.text))
             if in_reply_to_screen_name in num_tweets:
                 num_tweets[in_reply_to_screen_name] += 1
             else:
@@ -275,7 +279,7 @@ class MyStreamListener(tweepy.StreamListener):
             id=status.id, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
             author_joined_on=str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
             retweeted_tweet_id=retweeted_tweet_id, retweeted_tweet_date=retweeted_tweet_date, in_reply_to_screen_name=in_reply_to_screen_name,
-            replied_tweet_id=replied_tweet_id, replied_tweet_date=replied_tweet_date, hashtags=hashtags
+            replied_tweet_id=replied_tweet_id, replied_tweet_date=replied_tweet_date, replied_tweet_text=replied_tweet_text, hashtags=hashtags
         )
         if self.first:
             self.output.write(json.dumps(tweet.__dict__))
