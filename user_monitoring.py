@@ -8,7 +8,6 @@ import re
 from unidecode import unidecode
 import datetime
 import requests
-from py2neo import Graph, authenticate
 
 
 emoji_pattern = re.compile("["
@@ -142,7 +141,10 @@ def get_latest_followers(screen_name, previous_scan, new_file):
                 new_file = False
             else:
                 output_file.write(",\n\n" + json.dumps(follower_saved.__dict__))
-            resp = requests.post(add_user_url, headers={'Content-Type': 'application/json'}, data=json.dumps(follower_saved.__dict__), params={"target": screen_name}, verify=False)
+            resp = requests.post(add_user_url,
+                headers={'Content-Type': 'application/json'},
+                data=json.dumps(follower_saved.__dict__),
+                params={"target": screen_name, "type": ""}, verify=False)
             print resp.text
     return latest_follower, current_scan, num_follower - 1
 
@@ -158,24 +160,20 @@ def real_screen_name(screen_name):
     profile_image_url = user.profile_image_url.replace("normal", "200x200")
     location = unidecode(user.location)
     verified = user.verified
-    created_at = user.created_at
+    created_at = str(user.created_at)
 
-    tx = graph.cypher.begin()
-    tx.append("OPTIONAL MATCH(n) WHERE n.screen_name={target} RETURN CASE n WHEN null THEN 0 ELSE 1 END as result", target=screen_name)
-    target_exists = tx.commit()[0][0][0]
-    tx = graph.cypher.begin()
-    if(target_exists != 1):
-        tx = graph.cypher.begin()
-        tx.append('''CREATE (user:Origin:User {screen_name:{screen_name},
-            verified:{verified}, description:{description},
-            created_at:{created_at}, profile_image_url:{profile_image_url},
-            followed_at:"", followers:{followers},
-            location:{location}, following:{following}, id:{id}})
-            RETURN user''', screen_name=screen_name, verified=verified,
-            description=description, created_at=created_at,
-            profile_image_url=profile_image_url,
-            followers=followers, location=location, following=following, id=id)
-        tx.commit()
+    target = Follower(  # using Follower class for user being monitored
+        screen_name=screen_name, id=id, description=description,
+        followers=followers, following=following,
+        profile_image_url=profile_image_url, location=location,
+        verified=verified, created_at=created_at,
+        followed_at=""
+    )
+    resp = requests.post(add_user_url,
+        headers={'Content-Type': 'application/json'},
+        data=json.dumps(target.__dict__),
+        params={"target": screen_name, "type": ":Origin"}, verify=False)
+    print resp.text
 
     return user.screen_name
 
@@ -203,10 +201,6 @@ if __name__ == '__main__':
         auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True,
         compression=True
     )
-
-    psswrd = data["database_psswrd"]
-    authenticate("localhost:7474", "neo4j", psswrd)
-    graph = Graph("http://localhost:7474/db/data/")
 
     # pass in the username(s) of the account(s) you want to monitor
     ensure_dir("json/")
