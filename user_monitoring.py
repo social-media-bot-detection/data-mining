@@ -49,7 +49,7 @@ def close_file():
     output_file.close()
 
 
-class Follower:
+class User:
     def __init__(self, screen_name, id, description, followers, following,
                 profile_image_url, location, verified, created_at, followed_at):
         self.screen_name = screen_name
@@ -129,7 +129,7 @@ def get_latest_followers(screen_name, previous_scan, new_file):
                 shortest_follow_time_text = date_delta_text
             print "\tcreated_at: %s, %s ago" % (created_at, date_delta_text)
 
-            follower_saved = Follower(
+            follower_saved = User(
                 screen_name=follower.screen_name, id=id, description=description,
                 followers=followers, following=following,
                 profile_image_url=profile_image_url, location=location,
@@ -162,7 +162,7 @@ def real_screen_name(screen_name):
     verified = user.verified
     created_at = str(user.created_at)
 
-    target = Follower(  # using Follower class for user being monitored
+    target = User(
         screen_name=screen_name, id=id, description=description,
         followers=followers, following=following,
         profile_image_url=profile_image_url, location=location,
@@ -237,7 +237,7 @@ if __name__ == '__main__':
             print "===== waiting %d seconds for next scan... =====" % wait_seconds
             time.sleep(wait_seconds)
         except tweepy.error.TweepError as e:
-            print "===== ERROR =====\nreason: %s\napi_code: %d\nresponse: %s" % (
-                e.reason, e.api_code, e.response
+            print "===== ERROR =====\nreason: %s\nresponse: %s" % (
+                e.reason, e.response
             )
             errors += 1

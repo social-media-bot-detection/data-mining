@@ -7,6 +7,9 @@ import csv
 import re
 import time
 import atexit
+import requests
+from py2neo import Graph, authenticate
+from user_monitoring import User
 
 
 emoji_pattern = re.compile("["
@@ -15,6 +18,8 @@ emoji_pattern = re.compile("["
         u"\U0001F680-\U0001F6FF"  # transport & map symbols
         u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
                            "]+", flags=re.UNICODE)
+add_user_url = "http://localhost:80/add_user"
+add_tweet_url = "http://localhost:80/add_tweet"
 reload(sys)
 sys.setdefaultencoding('utf8')
 
@@ -65,7 +70,7 @@ def get_user_info(screen_name):
     profile_image_url = user.profile_image_url.replace("normal", "200x200")
     location = unidecode(user.location)
     verified = user.verified
-    created_at = user.created_at
+    created_at = str(user.created_at)
 
     print("screen name: %s" % screen_name)
     print("id: %s" % id)
@@ -75,6 +80,19 @@ def get_user_info(screen_name):
     print("image url: %s" % profile_image_url)
     print("location: %s" % location)
     print("verified: %s" % verified)
+
+    target = User(
+        screen_name=screen_name, id=id, description=description,
+        followers=followers, following=following,
+        profile_image_url=profile_image_url, location=location,
+        verified=verified, created_at=created_at,
+        followed_at=""
+    )
+    resp = requests.post(add_user_url,
+        headers={'Content-Type': 'application/json'},
+        data=json.dumps(target.__dict__),
+        params={"target": screen_name, "type": ":Origin"}, verify=False)
+    print resp.text
 
     with open('csv/all_users_info.csv', 'a+') as f:
         writer = csv.writer(f)
@@ -216,10 +234,10 @@ class MyStreamListener(tweepy.StreamListener):
         # When a tweet is published it arrives here.
         type = "?"
         retweeted_from_screen_name = ""
-        retweeted_tweet_id = -1
+        retweeted_tweet_id = "-1"
         retweeted_tweet_date = ""
         in_reply_to_screen_name = ""
-        replied_tweet_id = -1
+        replied_tweet_id = "-1"
         replied_tweet_date = ""
         replied_tweet_text = ""
 
@@ -276,7 +294,7 @@ class MyStreamListener(tweepy.StreamListener):
         for real_username in self.users:
             print "\t%s: %d" % (real_username, num_tweets[real_username])
         tweet = SavedTweet(
-            id=status.id, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
+            id=status.id_str, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
             author_joined_on=str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
             retweeted_tweet_id=retweeted_tweet_id, retweeted_tweet_date=retweeted_tweet_date, in_reply_to_screen_name=in_reply_to_screen_name,
             replied_tweet_id=replied_tweet_id, replied_tweet_date=replied_tweet_date, replied_tweet_text=replied_tweet_text, hashtags=hashtags
@@ -286,6 +304,8 @@ class MyStreamListener(tweepy.StreamListener):
             self.first = False
         else:
             self.output.write(",\n\n" + json.dumps(tweet.__dict__))
+        resp = requests.post(add_tweet_url, headers={'Content-Type': 'application/json'}, data=json.dumps(tweet.__dict__), verify=False)
+        print resp.text
         print("-"*10)
 
 
@@ -336,7 +356,7 @@ if __name__ == '__main__':
     try:
         myStream.filter(follow=user_ids)
     except tweepy.error.TweepError as e:
-        print "===== ERROR =====\nreason: %s\napi_code: %d\nresponse: %s" % (
-            e.reason, e.api_code, e.response
+        print "===== ERROR =====\nreason: %s\nresponse: %s" % (
+            e.reason, e.response
         )
         errors += 1
