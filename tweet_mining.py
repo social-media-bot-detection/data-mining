@@ -10,6 +10,7 @@ import atexit
 import requests
 from py2neo import Graph, authenticate
 from user_monitoring import User
+import operator
 
 
 emoji_pattern = re.compile("["
@@ -291,8 +292,12 @@ class MyStreamListener(tweepy.StreamListener):
             print ("   #"+hashtag['text'].encode('utf-8'))
         print "errors: %d" % errors
         print "total_tweets: %d\ntweets_per_user..." % self.counter
-        for real_username in self.users:
-            print "\t%s: %d" % (real_username, num_tweets[real_username])
+        sorted_num_tweets = sorted(num_tweets.items(), key=operator.itemgetter(1), reverse=True)
+        for real_username in sorted_num_tweets:
+            real_username_string = real_username[0].encode('utf-8')
+            # print "\t%s: %d" % (real_username_string, num_tweets[real_username_string])
+            if real_username_string in self.users:
+                print "\t%s: %d" % (real_username_string, num_tweets[real_username_string])
         tweet = SavedTweet(
             id=status.id_str, text=unidecode(emoji_pattern.sub(r'', status.text)).encode('utf-8', errors='replace'), type=type, author=status.author.screen_name,
             author_joined_on=str(status.author.created_at), created_at=str(status.created_at), source=status.source, retweeted_from_screen_name=retweeted_from_screen_name,
