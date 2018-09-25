@@ -61,7 +61,8 @@ api = tweepy.API(
 )
 
 for file in sys.argv[2:]:
-    count = 0
+    tweet_count = 0
+    reply_count = 0
     bots_count = 0
     bots_tweet_num = []
     errors = 0
@@ -76,10 +77,12 @@ for file in sys.argv[2:]:
             data = json.load(json_data_file)
             for tweet in data:
                 # print "\ttype: %s" % tweet['type']
+                tweet_count += 1
                 if tweet['type'] == "reply" and "replied_tweet_text" in tweet:
-                    count += 1
+                    reply_count += 1
                     print "-------------------------------"
-                    print "tweet #%d" % count
+                    print "reply #%d" % reply_count
+                    print "tweet #%d" % tweet_count
                     print "%d bots found -> %s" % (bots_count, bots_tweet_num)
                     print "%d errors -> %s" % (errors, errors_tweet_num)
                     print "text: %s" % unidecode(emoji_pattern.sub(r'', tweet['replied_tweet_text']))  # no emoji nor accents
@@ -126,7 +129,7 @@ for file in sys.argv[2:]:
                             e.reason, e.response
                         )
                         errors += 1
-                        errors_tweet_num.append('#' + str(count))
+                        errors_tweet_num.append('#' + str(reply_count))
 
                     pressed = raw_input("\nis this bot-generated? ")
                     # print "you entered %s", pressed
@@ -138,5 +141,5 @@ for file in sys.argv[2:]:
                                         tweet['created_at'],
                                         reason])
                         bots_count += 1
-                        bots_tweet_num.append('#' + str(count))
+                        bots_tweet_num.append('#' + str(reply_count))
                         print "tweet saved"
